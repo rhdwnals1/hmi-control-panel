@@ -131,15 +131,15 @@ export default function TankDetailPageStyled() {
   });
 
   // ② 빠른 창(초 단위, DO/TEMP 중심 + PH/SAL 포함)
-  const fastData = React.useMemo(() => {
+  const [fastData, setFastData] = React.useState(() => {
     const now = Date.now();
     return Array.from({ length: 60 }, (_, i) => now - (59 - i) * 1000).map(
       (ts) => ({
         ts,
-        DO: sensorValues.DO + (Math.random() - 0.5) * 0.2,
-        TEMP: sensorValues.TEMP + (Math.random() - 0.5) * 0.2,
-        PH: sensorValues.PH + (Math.random() - 0.5) * 0.02,
-        SAL: sensorValues.SAL + (Math.random() - 0.5) * 0.1,
+        DO: 6.5 + (Math.random() - 0.5) * 0.2,
+        TEMP: 15.2 + (Math.random() - 0.5) * 0.2,
+        PH: 7.8 + (Math.random() - 0.5) * 0.02,
+        SAL: 35.5 + (Math.random() - 0.5) * 0.1,
         // 배경 영역을 위한 고정값들
         DO_MIN: 6,
         DO_MAX: 8,
@@ -147,20 +147,67 @@ export default function TankDetailPageStyled() {
         TEMP_MAX: 18,
       })
     );
+  });
+
+  // 차트 데이터 업데이트 (연속성 유지)
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setFastData((prevData) => {
+        const now = Date.now();
+        const newData = [...prevData.slice(1)]; // 첫 번째 데이터 제거
+        newData.push({
+          ts: now,
+          DO: sensorValues.DO + (Math.random() - 0.5) * 0.2,
+          TEMP: sensorValues.TEMP + (Math.random() - 0.5) * 0.2,
+          PH: sensorValues.PH + (Math.random() - 0.5) * 0.02,
+          SAL:
+            Math.min(Math.max(sensorValues.SAL ?? 35.5, 0), 40) +
+            (Math.random() - 0.5) * 0.1,
+          // 배경 영역을 위한 고정값들
+          DO_MIN: 6,
+          DO_MAX: 8,
+          TEMP_MIN: 10,
+          TEMP_MAX: 18,
+        });
+        return newData;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, [sensorValues]);
 
   // ③ 느린 창(24h, pH/SAL 전용)
-  const slowData = React.useMemo(() => {
+  const [slowData, setSlowData] = React.useState(() => {
     const now = Date.now();
     return Array.from(
       { length: 48 },
       (_, i) => now - (47 - i) * 30 * 60 * 1000
     ).map((ts) => ({
       ts,
-      PH: (tag("TANK1.PH")?.value ?? 7.6) + (Math.random() - 0.5) * 0.03,
-      SAL: (tag("TANK1.SAL")?.value ?? 30) + (Math.random() - 0.5) * 0.15,
+      PH: 7.8 + (Math.random() - 0.5) * 0.1,
+      SAL: 35.5 + (Math.random() - 0.5) * 0.5,
     }));
-  }, [tag]);
+  });
+
+  // 24h 차트 데이터 업데이트 (연속성 유지)
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setSlowData((prevData) => {
+        const now = Date.now();
+        const newData = [...prevData.slice(1)]; // 첫 번째 데이터 제거
+        newData.push({
+          ts: now,
+          PH: sensorValues.PH + (Math.random() - 0.5) * 0.1,
+          SAL:
+            Math.min(Math.max(sensorValues.SAL ?? 35.5, 0), 40) +
+            (Math.random() - 0.5) * 0.5,
+        });
+        return newData;
+      });
+    }, 30 * 60 * 1000); // 30분마다 업데이트
+
+    return () => clearInterval(interval);
+  }, [sensorValues]);
 
   const criticals = alarms.filter(
     (a) => a.active && a.severity === "CRIT" && a.tagId.startsWith(tankId || "")
@@ -301,10 +348,14 @@ export default function TankDetailPageStyled() {
           <Card>
             <CircularGauge>
               <GaugeValue>
-                {sensorValues.SAL.toFixed(1)}
+                {Math.min(Math.max(sensorValues.SAL ?? 35.5, 0), 40).toFixed(1)}
                 <GaugeUnit>ppt</GaugeUnit>
               </GaugeValue>
-              <GaugeArc $value={sensorValues.SAL} $max={40} $color="#8b5cf6" />
+              <GaugeArc
+                $value={Math.min(Math.max(sensorValues.SAL ?? 35.5, 0), 40)}
+                $max={40}
+                $color="#8b5cf6"
+              />
             </CircularGauge>
             <Subtle>염도</Subtle>
             <KPITarget>목표 28~37ppt</KPITarget>
@@ -328,7 +379,7 @@ export default function TankDetailPageStyled() {
               </Chip>
             ))}
           </Chips>
-          <div style={{ height: 280, marginTop: 12 }}>
+          <ChartWrapper>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={fastData}
@@ -340,11 +391,15 @@ export default function TankDetailPageStyled() {
                   tickFormatter={(v) => new Date(v).toLocaleTimeString()}
                   minTickGap={28}
                 />
-                <YAxis domain={[0, 20]} />
+                <YAxis domain={seriesOn.SAL ? [0, 36] : [0, 20]} />
                 <Tooltip
                   labelFormatter={(l) =>
                     new Date(Number(l)).toLocaleTimeString()
                   }
+                  formatter={(value: number, name: string) => [
+                    value.toFixed(2),
+                    name,
+                  ]}
                 />
                 <Legend />
                 {/* 배경 영역 - DO와 TEMP 적정 범위 */}
@@ -401,13 +456,13 @@ export default function TankDetailPageStyled() {
                 )}
               </ComposedChart>
             </ResponsiveContainer>
-          </div>
+          </ChartWrapper>
         </Section>
 
         {/* 24h Trend — pH & SAL */}
         <Section>
           <SectionTitle>24h Trend — pH & Salinity</SectionTitle>
-          <div style={{ height: 280 }}>
+          <ChartWrapper>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={slowData}
@@ -422,6 +477,10 @@ export default function TankDetailPageStyled() {
                 <YAxis />
                 <Tooltip
                   labelFormatter={(l) => new Date(Number(l)).toLocaleString()}
+                  formatter={(value: number, name: string) => [
+                    value.toFixed(2),
+                    name,
+                  ]}
                 />
                 <Legend />
                 <Line
@@ -442,14 +501,14 @@ export default function TankDetailPageStyled() {
                 />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </ChartWrapper>
         </Section>
 
         {/* Faceplates */}
         <FaceplateRow>
           <Face>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>AERATOR-1</div>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>산소공급기</div>
               <Subtle>
                 상태: {(tag("TANK1.DO")?.value ?? 0) < 5.2 ? "RUN" : "STOP"}
               </Subtle>
@@ -463,8 +522,10 @@ export default function TankDetailPageStyled() {
           </Face>
           <Face>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>PUMP-1</div>
-              <Subtle>상태: RUN</Subtle>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>펌프</div>
+              <Subtle>
+                상태: {(tag("TANK1.DO")?.value ?? 0) < 6.5 ? "RUN" : "STOP"}
+              </Subtle>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <Btn $danger>STOP</Btn>
@@ -507,6 +568,14 @@ const Page = styled.div`
   min-height: 100vh;
   background: linear-gradient(180deg, #e0f2fe 0%, #f1f5f9 100%);
   padding: 24px;
+
+  @media (max-width: 768px) {
+    padding: 16px;
+  }
+
+  @media (max-width: 640px) {
+    padding: 12px;
+  }
 `;
 const Container = styled.div`
   max-width: 1120px;
@@ -514,6 +583,14 @@ const Container = styled.div`
   display: grid;
   grid-auto-rows: max-content;
   gap: 20px;
+
+  @media (max-width: 768px) {
+    gap: 16px;
+  }
+
+  @media (max-width: 640px) {
+    gap: 12px;
+  }
 `;
 const HeaderCard = styled.div`
   border-radius: 24px;
@@ -524,6 +601,15 @@ const HeaderCard = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+    gap: 12px;
+  }
 `;
 const BackButton = styled.button`
   background: rgba(255, 255, 255, 0.2);
@@ -553,6 +639,11 @@ const Subtle = styled.div`
 const Chips = styled.div`
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+
+  @media (max-width: 640px) {
+    gap: 6px;
+  }
 `;
 const Chip = styled.label<{ $active?: boolean }>`
   display: inline-flex;
@@ -574,8 +665,12 @@ const Grid = styled.div`
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  @media (max-width: 900px) {
+  @media (max-width: 1200px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 `;
 const Card = styled.div`
@@ -592,6 +687,18 @@ const CircularGauge = styled.div`
   width: 120px;
   height: 120px;
   margin: 0 auto 16px;
+
+  @media (max-width: 768px) {
+    width: 100px;
+    height: 100px;
+    margin-bottom: 12px;
+  }
+
+  @media (max-width: 640px) {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 8px;
+  }
 `;
 
 const GaugeValue = styled.div`
@@ -604,6 +711,14 @@ const GaugeValue = styled.div`
   color: #1e293b;
   text-align: center;
   z-index: 10;
+
+  @media (max-width: 768px) {
+    font-size: 20px;
+  }
+
+  @media (max-width: 640px) {
+    font-size: 16px;
+  }
 `;
 
 const GaugeUnit = styled.span`
@@ -646,6 +761,20 @@ const KPITarget = styled.div`
 `;
 const Section = styled(Card)`
   padding: 16px;
+`;
+
+const ChartWrapper = styled.div`
+  height: 280px;
+  margin-top: 12px;
+
+  @media (max-width: 768px) {
+    height: 250px;
+  }
+
+  @media (max-width: 640px) {
+    height: 200px;
+    margin-top: 8px;
+  }
 `;
 const SectionTitle = styled.div`
   font-size: 13px;

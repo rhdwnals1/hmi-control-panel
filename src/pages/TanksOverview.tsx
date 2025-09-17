@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { useLiveStore } from "../store/liveStore";
 import { TankCard } from "../components/TankCard";
@@ -14,6 +15,7 @@ import { getAllTankIds } from "../utils/tankUtils";
  * 탱크 오버뷰 페이지
  */
 export default function TanksOverview() {
+  const navigate = useNavigate();
   const tags = useLiveStore((state) => state.tags);
   const [isMuted, setIsMuted] = useState(false);
 
@@ -51,6 +53,10 @@ export default function TanksOverview() {
   }, [criticalTanks]);
 
   const handleTankClick = (tankId: string) => {
+    navigate(`/tanks/${tankId}`);
+  };
+
+  const handleCriticalTankClick = (tankId: string) => {
     window.open(`/tanks/${tankId}`, "_blank");
   };
 
@@ -72,7 +78,9 @@ export default function TanksOverview() {
                   const details = getAlarmDetails(tank);
                   return (
                     <TankAlert key={tank.tankId}>
-                      <TankLink onClick={() => handleTankClick(tank.tankId)}>
+                      <TankLink
+                        onClick={() => handleCriticalTankClick(tank.tankId)}
+                      >
                         {tank.tankId}
                       </TankLink>
                       <AlarmList>
@@ -272,13 +280,11 @@ const MuteButton = styled.button`
 const TankGrid = styled.div`
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-
-  @media (max-width: 1200px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  justify-items: center;
 
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
+    justify-items: stretch;
   }
 `;

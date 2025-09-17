@@ -1,7 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { ResponsiveContainer, LineChart, Line, YAxis } from "recharts";
 import { useLiveStore } from "../store/liveStore";
 import { useLightVisible, useLightStream } from "../hooks/useLightStream";
 import {
@@ -9,7 +8,6 @@ import {
   formatSensorValue,
   getSensorUnit,
 } from "../utils/tankUtils";
-import { SENSOR_COLORS, UI_CONSTANTS } from "../constants";
 interface TankCardProps {
   tankId: string;
   status?: {
@@ -47,25 +45,6 @@ export const TankCard = ({ tankId, status, onOpen }: TankCardProps) => {
     PH: tags[`${tankId}.PH`]?.value,
     SAL: tags[`${tankId}.SAL`]?.value,
   };
-
-  // 스파크라인 데이터
-  const [sparklineData, setSparklineData] = useState<
-    Array<{
-      ts: number;
-      DO?: number;
-      TEMP?: number;
-      PH?: number;
-      SAL?: number;
-    }>
-  >([]);
-
-  useEffect(() => {
-    const timestamp = Date.now();
-    setSparklineData((prev) => {
-      const newData = { ts: timestamp, ...sensorValues };
-      return [...prev, newData].slice(-UI_CONSTANTS.SPARKLINE_POINTS);
-    });
-  }, [sensorValues.DO, sensorValues.TEMP, sensorValues.PH, sensorValues.SAL]);
 
   const handleClick = () => {
     navigate(`/tanks/${tankId}`);
@@ -122,42 +101,6 @@ export const TankCard = ({ tankId, status, onOpen }: TankCardProps) => {
           </KPIValue>
         </KPICard>
       </KPIGrid>
-
-      <SparklineContainer>
-        <ResponsiveContainer width="100%" height={60}>
-          <LineChart data={sparklineData}>
-            <YAxis hide domain={["auto", "auto"]} />
-            <Line
-              type="monotone"
-              dataKey="DO"
-              stroke={SENSOR_COLORS.DO}
-              dot={false}
-              strokeWidth={1}
-            />
-            <Line
-              type="monotone"
-              dataKey="TEMP"
-              stroke={SENSOR_COLORS.TEMP}
-              dot={false}
-              strokeWidth={1}
-            />
-            <Line
-              type="monotone"
-              dataKey="PH"
-              stroke={SENSOR_COLORS.PH}
-              dot={false}
-              strokeWidth={1}
-            />
-            <Line
-              type="monotone"
-              dataKey="SAL"
-              stroke={SENSOR_COLORS.SAL}
-              dot={false}
-              strokeWidth={1}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </SparklineContainer>
     </Card>
   );
 };
@@ -172,6 +115,11 @@ const Card = styled.div<{ $hasAlarm?: boolean; $criticalCount?: number }>`
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
+  width: 280px;
+  height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 
   ${(p) =>
     p.$hasAlarm &&
@@ -276,7 +224,6 @@ const KPIGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 8px;
 `;
 
 const KPICard = styled.div`
@@ -296,9 +243,4 @@ const KPIUnit = styled.span`
   font-weight: 400;
   color: #64748b;
   margin-left: 4px;
-`;
-
-const SparklineContainer = styled.div`
-  margin-top: 8px;
-  height: 60px;
 `;
