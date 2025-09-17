@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import styled from "styled-components";
 import {
   LineChart,
@@ -9,27 +10,117 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
+  ReferenceArea,
+  ComposedChart,
 } from "recharts";
-import { useMockLiveStream } from "../lib/mockStream";
+// import { useMockLiveStream } from "../lib/mockStream";
 import { useLiveStore } from "../store/liveStore";
-import type { TagId } from "../types";
+import type { Alarm, TagId } from "../types";
 import { timeAgo } from "../utils/time";
+import { SENSOR_KEYS } from "../constants";
 
 export default function TankDetailPageStyled() {
-  const tagIds = ["TANK1.DO", "TANK1.TEMP", "TANK1.PH", "TANK1.SAL"] as TagId[];
-  const { values, alarms } = useMockLiveStream(tagIds);
+  const { tankId } = useParams<{ tankId: string }>();
+  const navigate = useNavigate();
   const setTags = useLiveStore((s) => s.setTags);
   const setAlarms = useLiveStore((s) => s.setAlarms);
-  const { tags, ackAlarm } = useLiveStore();
+  const { tags, ackAlarm, alarms } = useLiveStore();
+
+  // 실제 데이터로 업데이트
+  const values = React.useMemo(() => {
+    if (!tankId) return {};
+    const now = Date.now();
+    return {
+      [`${tankId}.DO`]: {
+        id: `${tankId}.DO`,
+        label: `${tankId}.DO`,
+        value: 6.1 + (Math.random() - 0.5) * 0.2,
+        ts: now,
+        quality: "GOOD" as const,
+      },
+      [`${tankId}.TEMP`]: {
+        id: `${tankId}.TEMP`,
+        label: `${tankId}.TEMP`,
+        value: 15.1 + (Math.random() - 0.5) * 0.2,
+        ts: now,
+        quality: "GOOD" as const,
+      },
+      [`${tankId}.PH`]: {
+        id: `${tankId}.PH`,
+        label: `${tankId}.PH`,
+        value: 7.52 + (Math.random() - 0.5) * 0.02,
+        ts: now,
+        quality: "GOOD" as const,
+      },
+      [`${tankId}.SAL`]: {
+        id: `${tankId}.SAL`,
+        label: `${tankId}.SAL`,
+        value: 30.1 + (Math.random() - 0.5) * 0.1,
+        ts: now,
+        quality: "GOOD" as const,
+      },
+    };
+  }, [tankId]);
 
   React.useEffect(() => {
     setTags(values);
   }, [values, setTags]);
-  React.useEffect(() => {
-    setAlarms(alarms);
-  }, [alarms, setAlarms]);
 
-  const tag = (id: TagId) => tags[id];
+  // 1초마다 데이터 업데이트
+  React.useEffect(() => {
+    if (!tankId) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const newValues = {
+        [`${tankId}.DO`]: {
+          id: `${tankId}.DO`,
+          label: `${tankId}.DO`,
+          value: 6.1 + (Math.random() - 0.5) * 0.2,
+          ts: now,
+          quality: "GOOD" as const,
+        },
+        [`${tankId}.TEMP`]: {
+          id: `${tankId}.TEMP`,
+          label: `${tankId}.TEMP`,
+          value: 15.1 + (Math.random() - 0.5) * 0.2,
+          ts: now,
+          quality: "GOOD" as const,
+        },
+        [`${tankId}.PH`]: {
+          id: `${tankId}.PH`,
+          label: `${tankId}.PH`,
+          value: 7.52 + (Math.random() - 0.5) * 0.02,
+          ts: now,
+          quality: "GOOD" as const,
+        },
+        [`${tankId}.SAL`]: {
+          id: `${tankId}.SAL`,
+          label: `${tankId}.SAL`,
+          value: 30.1 + (Math.random() - 0.5) * 0.1,
+          ts: now,
+          quality: "GOOD" as const,
+        },
+      };
+      setTags(newValues);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [setTags, tankId]);
+
+  const tag = React.useCallback((id: TagId) => tags[id], [tags]);
+
+  // 현재 센서 값들
+  const sensorValues = React.useMemo(
+    () => ({
+      DO: tag(`${tankId}.DO` as TagId)?.value ?? 6.1,
+      TEMP: tag(`${tankId}.TEMP` as TagId)?.value ?? 15.1,
+      PH: tag(`${tankId}.PH` as TagId)?.value ?? 7.52,
+      SAL: tag(`${tankId}.SAL` as TagId)?.value ?? 30.1,
+    }),
+    [tag, tankId]
+  );
 
   // ① 시리즈 토글 상태
   const [seriesOn, setSeriesOn] = React.useState({
@@ -45,13 +136,18 @@ export default function TankDetailPageStyled() {
     return Array.from({ length: 60 }, (_, i) => now - (59 - i) * 1000).map(
       (ts) => ({
         ts,
-        DO: (tag("TANK1.DO")?.value ?? 6) + (Math.random() - 0.5) * 0.2,
-        TEMP: (tag("TANK1.TEMP")?.value ?? 22) + (Math.random() - 0.5) * 0.2,
-        PH: (tag("TANK1.PH")?.value ?? 7.6) + (Math.random() - 0.5) * 0.02,
-        SAL: (tag("TANK1.SAL")?.value ?? 30) + (Math.random() - 0.5) * 0.1,
+        DO: sensorValues.DO + (Math.random() - 0.5) * 0.2,
+        TEMP: sensorValues.TEMP + (Math.random() - 0.5) * 0.2,
+        PH: sensorValues.PH + (Math.random() - 0.5) * 0.02,
+        SAL: sensorValues.SAL + (Math.random() - 0.5) * 0.1,
+        // 배경 영역을 위한 고정값들
+        DO_MIN: 6,
+        DO_MAX: 8,
+        TEMP_MIN: 10,
+        TEMP_MAX: 18,
       })
     );
-  }, [values]);
+  }, [sensorValues]);
 
   // ③ 느린 창(24h, pH/SAL 전용)
   const slowData = React.useMemo(() => {
@@ -64,9 +160,64 @@ export default function TankDetailPageStyled() {
       PH: (tag("TANK1.PH")?.value ?? 7.6) + (Math.random() - 0.5) * 0.03,
       SAL: (tag("TANK1.SAL")?.value ?? 30) + (Math.random() - 0.5) * 0.15,
     }));
-  }, [values]);
+  }, [tag]);
 
-  const criticals = alarms.filter((a) => a.active && a.severity === "CRIT");
+  const criticals = alarms.filter(
+    (a) => a.active && a.severity === "CRIT" && a.tagId.startsWith(tankId || "")
+  );
+
+  // 실제 알림 생성 로직
+  React.useEffect(() => {
+    if (!tankId) return;
+
+    const newAlarms: Alarm[] = [];
+
+    // 각 센서별로 알람 체크
+    SENSOR_KEYS.forEach((sensor) => {
+      const tag = tags[`${tankId}.${sensor}`];
+      if (!tag || typeof tag.value !== "number") return;
+
+      let severity: "CRIT" | "MAJ" | "MIN" | "INFO" | null = null;
+      let message = "";
+
+      // DO 체크 (5.0 미만이면 Critical)
+      if (sensor === "DO" && tag.value < 5.0) {
+        severity = "CRIT";
+        message = "용존산소 농도가 위험 수준입니다! 즉시 확인하세요.";
+      }
+      // TEMP 체크 (10도 미만 또는 20도 초과)
+      else if (sensor === "TEMP" && (tag.value < 10.0 || tag.value > 20.0)) {
+        severity = "CRIT";
+        message = "수온이 비정상적입니다! 온도 조절이 필요합니다.";
+      }
+      // PH 체크 (6.8 미만 또는 8.2 초과)
+      else if (sensor === "PH" && (tag.value < 6.8 || tag.value > 8.2)) {
+        severity = "CRIT";
+        message = "pH가 비정상적입니다! 수질 조절이 필요합니다.";
+      }
+      // SAL 체크 (25 미만 또는 35 초과)
+      else if (sensor === "SAL" && (tag.value < 25 || tag.value > 35)) {
+        severity = "CRIT";
+        message = "염도가 비정상적입니다! 염분 조절이 필요합니다.";
+      }
+
+      if (severity) {
+        newAlarms.push({
+          id: `${tankId}-${sensor}-CRIT-${Date.now()}`,
+          tagId: `${tankId}.${sensor}`,
+          severity: severity as "CRIT" | "MAJ" | "MIN" | "INFO",
+          message,
+          active: true,
+          ts: Date.now(),
+          acknowledged: false,
+        });
+      }
+    });
+
+    if (newAlarms.length > 0) {
+      setAlarms(newAlarms);
+    }
+  }, [tankId, tags, setAlarms]);
 
   function rateExceeded(
     data: Array<{ ts: number; PH: number; SAL: number }>,
@@ -97,9 +248,12 @@ export default function TankDetailPageStyled() {
       <Container>
         <HeaderCard>
           <div>
-            <Title>Tank #1</Title>
+            <BackButton onClick={() => navigate("/tanks")}>
+              ← 전체탱크
+            </BackButton>
+            <Title>{tankId}-HMI</Title>
             <Subtle>
-              마지막 업데이트: {new Date().toLocaleTimeString()} · 연결: Online
+              마지막 업데이트: {new Date().toLocaleTimeString()} · 현재: Online
             </Subtle>
           </div>
           <Subtle>단위: mg/L, °C, pH, ppt</Subtle>
@@ -112,32 +266,48 @@ export default function TankDetailPageStyled() {
         {/* KPI */}
         <Grid>
           <Card>
+            <CircularGauge>
+              <GaugeValue>
+                {sensorValues.DO.toFixed(1)}
+                <GaugeUnit>mg/L</GaugeUnit>
+              </GaugeValue>
+              <GaugeArc $value={sensorValues.DO} $max={10} $color="#3b82f6" />
+            </CircularGauge>
             <Subtle>용존산소 (DO)</Subtle>
-            <KPIValue>
-              {tag("TANK1.DO")?.value?.toFixed(1) ?? "—"}
-              <KPIUnit>mg/L</KPIUnit>
-            </KPIValue>
+            <KPITarget>목표 6mg/L+</KPITarget>
           </Card>
           <Card>
+            <CircularGauge>
+              <GaugeValue>
+                {sensorValues.TEMP.toFixed(1)}
+                <GaugeUnit>°C</GaugeUnit>
+              </GaugeValue>
+              <GaugeArc $value={sensorValues.TEMP} $max={25} $color="#10b981" />
+            </CircularGauge>
             <Subtle>수온</Subtle>
-            <KPIValue>
-              {tag("TANK1.TEMP")?.value?.toFixed(1) ?? "—"}
-              <KPIUnit>°C</KPIUnit>
-            </KPIValue>
+            <KPITarget>목표 10~18°C</KPITarget>
           </Card>
           <Card>
+            <CircularGauge>
+              <GaugeValue>
+                {sensorValues.PH.toFixed(2)}
+                <GaugeUnit>pH</GaugeUnit>
+              </GaugeValue>
+              <GaugeArc $value={sensorValues.PH} $max={10} $color="#f59e0b" />
+            </CircularGauge>
             <Subtle>pH</Subtle>
-            <KPIValue>
-              {tag("TANK1.PH")?.value?.toFixed(2) ?? "—"}
-              <KPIUnit>pH</KPIUnit>
-            </KPIValue>
+            <KPITarget>목표 6.8~8.2pH</KPITarget>
           </Card>
           <Card>
+            <CircularGauge>
+              <GaugeValue>
+                {sensorValues.SAL.toFixed(1)}
+                <GaugeUnit>ppt</GaugeUnit>
+              </GaugeValue>
+              <GaugeArc $value={sensorValues.SAL} $max={40} $color="#8b5cf6" />
+            </CircularGauge>
             <Subtle>염도</Subtle>
-            <KPIValue>
-              {tag("TANK1.SAL")?.value?.toFixed(1) ?? "—"}
-              <KPIUnit>ppt</KPIUnit>
-            </KPIValue>
+            <KPITarget>목표 28~37ppt</KPITarget>
           </Card>
         </Grid>
 
@@ -146,7 +316,7 @@ export default function TankDetailPageStyled() {
           <SectionTitle>Live Trend — 선택 시리즈</SectionTitle>
           <Chips>
             {(["DO", "TEMP", "PH", "SAL"] as const).map((k) => (
-              <Chip key={k} active={(seriesOn as Record<string, boolean>)[k]}>
+              <Chip key={k} $active={(seriesOn as Record<string, boolean>)[k]}>
                 <input
                   type="checkbox"
                   checked={(seriesOn as Record<string, boolean>)[k]}
@@ -160,7 +330,7 @@ export default function TankDetailPageStyled() {
           </Chips>
           <div style={{ height: 280, marginTop: 12 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart
+              <ComposedChart
                 data={fastData}
                 margin={{ top: 10, right: 20, left: 0, bottom: 10 }}
               >
@@ -170,46 +340,66 @@ export default function TankDetailPageStyled() {
                   tickFormatter={(v) => new Date(v).toLocaleTimeString()}
                   minTickGap={28}
                 />
-                <YAxis />
+                <YAxis domain={[0, 20]} />
                 <Tooltip
                   labelFormatter={(l) =>
                     new Date(Number(l)).toLocaleTimeString()
                   }
                 />
                 <Legend />
+                {/* 배경 영역 - DO와 TEMP 적정 범위 */}
+                <ReferenceArea
+                  y1={10}
+                  y2={18}
+                  fill="#10b981"
+                  fillOpacity={0.1}
+                />
+                <ReferenceArea y1={0} y2={8} fill="#3b82f6" fillOpacity={0.1} />
+                {/* 참조선들 */}
+                <ReferenceLine y={5} stroke="#f97316" strokeDasharray="5 5" />
+                <ReferenceLine y={8} stroke="#f97316" strokeDasharray="5 5" />
+                <ReferenceLine y={6} stroke="#3b82f6" strokeDasharray="5 5" />
                 {seriesOn.DO && (
                   <Line
                     type="monotone"
                     dataKey="DO"
+                    stroke="#3b82f6"
                     strokeWidth={2}
                     dot={false}
+                    name="→ DO"
                   />
                 )}
                 {seriesOn.TEMP && (
                   <Line
                     type="monotone"
                     dataKey="TEMP"
+                    stroke="#10b981"
                     strokeWidth={2}
                     dot={false}
+                    name="→ TEMP"
                   />
                 )}
                 {seriesOn.PH && (
                   <Line
                     type="monotone"
                     dataKey="PH"
+                    stroke="#f59e0b"
                     strokeWidth={2}
                     dot={false}
+                    name="→ PH"
                   />
                 )}
                 {seriesOn.SAL && (
                   <Line
                     type="monotone"
                     dataKey="SAL"
+                    stroke="#8b5cf6"
                     strokeWidth={2}
                     dot={false}
+                    name="→ SAL"
                   />
                 )}
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </Section>
@@ -237,14 +427,18 @@ export default function TankDetailPageStyled() {
                 <Line
                   type="monotone"
                   dataKey="PH"
+                  stroke="#f59e0b"
                   strokeWidth={2}
                   dot={false}
+                  name="→ PH"
                 />
                 <Line
                   type="monotone"
                   dataKey="SAL"
+                  stroke="#8b5cf6"
                   strokeWidth={2}
                   dot={false}
+                  name="→ SAL"
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -261,10 +455,10 @@ export default function TankDetailPageStyled() {
               </Subtle>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <Btn danger={(tag("TANK1.DO")?.value ?? 0) < 5.2}>
+              <Btn $danger={(tag("TANK1.DO")?.value ?? 0) < 5.2}>
                 {(tag("TANK1.DO")?.value ?? 0) < 5.2 ? "STOP" : "START"}
               </Btn>
-              <Btn danger>RESET</Btn>
+              <Btn $danger>RESET</Btn>
             </div>
           </Face>
           <Face>
@@ -273,8 +467,8 @@ export default function TankDetailPageStyled() {
               <Subtle>상태: RUN</Subtle>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <Btn danger>STOP</Btn>
-              <Btn danger>RESET</Btn>
+              <Btn $danger>STOP</Btn>
+              <Btn $danger>RESET</Btn>
             </div>
           </Face>
         </FaceplateRow>
@@ -299,9 +493,7 @@ export default function TankDetailPageStyled() {
                 </Subtle>
                 <div style={{ flex: 1 }}>{a.message}</div>
                 <Subtle>{timeAgo(a.ts)}</Subtle>
-                {!a.acknowledged && (
-                  <Btn onClick={() => ackAlarm(a.id)}>ACK</Btn>
-                )}
+                {a.active && <Btn onClick={() => ackAlarm(a.id)}>ACK</Btn>}
               </AlarmRow>
             ))}
           </div>
@@ -333,6 +525,22 @@ const HeaderCard = styled.div`
   align-items: center;
   justify-content: space-between;
 `;
+const BackButton = styled.button`
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+`;
+
 const Title = styled.div`
   font-size: 22px;
   font-weight: 800;
@@ -346,7 +554,7 @@ const Chips = styled.div`
   display: flex;
   gap: 8px;
 `;
-const Chip = styled.label<{ active?: boolean }>`
+const Chip = styled.label<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -356,9 +564,9 @@ const Chip = styled.label<{ active?: boolean }>`
   cursor: pointer;
   user-select: none;
   border: 1px solid
-    ${(p) => (p.active ? "rgba(2,132,199,0.6)" : "rgba(15,23,42,0.15)")};
+    ${(p) => (p.$active ? "rgba(2,132,199,0.6)" : "rgba(15,23,42,0.15)")};
   background: ${(p) =>
-    p.active ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.7)"};
+    p.$active ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.7)"};
   backdrop-filter: blur(6px);
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
 `;
@@ -378,16 +586,63 @@ const Card = styled.div`
   backdrop-filter: blur(6px);
   box-shadow: 0 6px 16px rgba(2, 6, 23, 0.06);
 `;
-const KPIValue = styled.div`
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+
+const CircularGauge = styled.div`
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 16px;
 `;
-const KPIUnit = styled.span`
-  font-size: 13px;
+
+const GaugeValue = styled.div`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  font-weight: 800;
+  color: #1e293b;
+  text-align: center;
+  z-index: 10;
+`;
+
+const GaugeUnit = styled.span`
+  font-size: 14px;
   font-weight: 400;
   color: #64748b;
-  margin-left: 6px;
+  margin-left: 4px;
+`;
+
+const GaugeArc = styled.div<{ $value: number; $max: number; $color: string }>`
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    ${({ $color }) => $color} 0deg,
+    ${({ $color }) => $color} ${({ $value, $max }) => ($value / $max) * 360}deg,
+    #e5e7eb ${({ $value, $max }) => ($value / $max) * 360}deg,
+    #e5e7eb 360deg
+  );
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    background: white;
+    border-radius: 50%;
+  }
+`;
+
+const KPITarget = styled.div`
+  font-size: 12px;
+  color: #10b981;
+  font-weight: 600;
+  margin-top: 8px;
 `;
 const Section = styled(Card)`
   padding: 16px;
@@ -410,12 +665,12 @@ const Face = styled(Card)`
   align-items: center;
   justify-content: space-between;
 `;
-const Btn = styled.button<{ danger?: boolean }>`
+const Btn = styled.button<{ $danger?: boolean }>`
   padding: 8px 12px;
   border-radius: 12px;
   font-size: 12px;
-  border: 1px solid ${(p) => (p.danger ? "#fb7185" : "#cbd5e1")};
-  background: ${(p) => (p.danger ? "#ffe4e6" : "#fff")};
+  border: 1px solid ${(p) => (p.$danger ? "#fb7185" : "#cbd5e1")};
+  background: ${(p) => (p.$danger ? "#ffe4e6" : "#fff")};
   box-shadow: 0 2px 8px rgba(2, 6, 23, 0.06);
   &:active {
     transform: scale(0.98);
