@@ -1,7 +1,7 @@
 # HMI Control Panel
 
-<img width="1920" height="1080" alt="스크린샷 2025-09-17 오후 1 14 03(2)" src="https://github.com/user-attachments/assets/ac1a322b-4935-42b7-a4cb-d82d72eafcf8" />
-<img width="1335" height="886" alt="스크린샷 2025-09-17 오후 6 07 46" src="https://github.com/user-attachments/assets/43d4b9e3-1c0a-485f-9059-c48631be4cd6" />
+<img width="659" height="766" alt="스크린샷 2025-09-18 오전 11 29 44" src="https://github.com/user-attachments/assets/66cea3f4-1442-4403-81cd-5c0a4c0f03c8" />
+<img width="1329" height="804" alt="스크린샷 2025-09-18 오전 11 29 28" src="https://github.com/user-attachments/assets/900b7c4f-872e-4640-b12c-240834c8d33b" />
 
 
 ## 개요
