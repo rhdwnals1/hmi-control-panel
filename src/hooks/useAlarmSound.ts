@@ -1,80 +1,74 @@
 import { useEffect, useRef } from "react";
-import { SOUND_FILES, UI_CONSTANTS } from "../constants";
 
 interface UseAlarmSoundProps {
   shouldPlay: boolean;
   type: "critical" | "major" | "minor";
-  isMuted?: boolean;
+  isMuted: boolean;
 }
 
-/**
- * 알람 소리 재생 훅
- */
-export const useAlarmSound = ({
-  shouldPlay,
-  type,
-  isMuted = false,
-}: UseAlarmSoundProps): void => {
-  const intervalRef = useRef<number | null>(null);
+export const useAlarmSound = ({ shouldPlay, isMuted }: UseAlarmSoundProps) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hasPlayedRef = useRef(false);
 
   useEffect(() => {
-    // 알람이 없거나 음소거 상태면 소리 중지
     if (!shouldPlay || isMuted) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
       }
       return;
     }
 
-    const soundFile = SOUND_FILES[type];
+    // Create audio element if it doesn't exist
+    if (!audioRef.current) {
+      audioRef.current = new Audio("/sounds/critical-alarm.mp3");
+      audioRef.current.loop = true;
+      audioRef.current.volume = 0.5; // 볼륨 조절
+    }
 
-    // 즉시 재생
-    const playSound = () => {
-      const audio = new Audio(soundFile);
-      audio.volume = UI_CONSTANTS.AUDIO_VOLUME;
-      audio.play().catch((error) => {
-        console.warn(`사운드 재생 실패: ${soundFile}`, error);
-      });
-    };
-
-    playSound();
-
-    // 반복 재생 설정
-    intervalRef.current = window.setInterval(
-      playSound,
-      UI_CONSTANTS.ALARM_REPEAT_INTERVAL
-    );
-
-    // 정리 함수
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+    // Play the alarm with user interaction
+    const playAlarm = async () => {
+      try {
+        if (audioRef.current && !hasPlayedRef.current) {
+          await audioRef.current.play();
+          hasPlayedRef.current = true;
+          console.log("🚨 Critical alarm playing!");
+        }
+      } catch (error) {
+        console.error("Failed to play alarm:", error);
+        // 사용자 상호작용이 필요한 경우, 클릭 이벤트로 재생 시도
+        const handleFirstClick = async () => {
+          try {
+            if (audioRef.current) {
+              await audioRef.current.play();
+              hasPlayedRef.current = true;
+              console.log("🚨 Critical alarm playing after user interaction!");
+            }
+          } catch (e) {
+            console.error("Still failed to play alarm:", e);
+          }
+          document.removeEventListener("click", handleFirstClick);
+        };
+        document.addEventListener("click", handleFirstClick);
       }
     };
-  }, [shouldPlay, type, isMuted]);
-};
 
-/**
- * 오디오 권한 요청 함수
- */
-export const requestAudioPermission = async (): Promise<void> => {
-  if (typeof window === "undefined" || !("AudioContext" in window)) {
-    return;
-  }
+    playAlarm();
 
-  try {
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    const audioContext = new AudioContextClass();
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    };
+  }, [shouldPlay, isMuted]);
 
-    if (audioContext.state === "suspended") {
-      await audioContext.resume();
-    }
-  } catch (error) {
-    console.warn("오디오 권한 요청 실패:", error);
-  }
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 };
